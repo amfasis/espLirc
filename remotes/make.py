@@ -89,7 +89,7 @@ def __read_remote(remote, line):
 
 def __read_codes(remote, line):
     (key, code) = tuple(filter(None, line.split(" ")))
-    bytecode = bytearray.fromhex(code.replace("0x", ""))
+    bytecode = bytearray.fromhex("0" * (2 - len(code)%2) + code.replace("0x", ""))
     if len(bytecode) * 8 != remote.bits:
         logging.info(
             "Warning, incorrect number of bits for key '{}'".format(key))
@@ -97,7 +97,9 @@ def __read_codes(remote, line):
 
 
 def __make_length(array, size):
-    result = array[:5]
+    if array is None:
+        array = []
+    result = array[:size]
     if len(result) < size:
         result = result + [0] * (size - len(result))
     return result
@@ -140,8 +142,9 @@ def __write_remote_bin(filename, remote):
         outf.write(b'\0')
         bytes_as_bits = ''.join(format(byte, '08b') for byte in code)
 
-        for b in bytes_as_bits:
-            outf.write(struct.pack('?', b == '1'))
+        outf.write(bytes_as_bits[-remote.bits:].encode('ascii'))
+        # for b in bytes_as_bits:
+            # outf.write(struct.pack('?', b))
         
     outf.close()
 
