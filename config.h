@@ -2,6 +2,7 @@
 #define CONFIG_H
 
 #include <stdint.h>
+#include <Arduino.h>
 
 // --- config structs ---
 struct WifiConfig
@@ -29,5 +30,13 @@ struct __attribute__ ((packed)) LircRemoteConfig
 
 #define path_wifi_txt "/wifi.txt"
 #define path_lirc_txt "/lirc.txt"
+
+//---- GLobals
+extern WifiConfig configWifi;
+extern LircRemoteConfig configRemote;
+extern char configKeys[2048];
+extern size_t configKeysSize;
+
+void readConfig();
 
 #endif /* CONFIG_H */

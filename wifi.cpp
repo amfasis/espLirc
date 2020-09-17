@@ -1,30 +1,23 @@
 #include "wifi.h"
-#include "FS.h"
+#include <FS.h>
 #include "config.h"
+#include "print.h"
 
 bool connect_wifi()
 {
-    File configF = SPIFFS.open(path_wifi_txt, "r");
-    if(!configF)
-        return false; //should reboot to config
-
-    WifiConfig config;
-    configF.readBytes((char*)&config, sizeof(config));
-    configF.close();
-
-    if(config.ssid[0] == 0)
+    if(configWifi.ssid[0] == 0)
         return false;
 
-    IPAddress ip(config.ip[0], config.ip[1], config.ip[2], config.ip[3]);
-    IPAddress gateway(config.gateway[0], config.gateway[1], config.gateway[2], config.gateway[3]);
-    IPAddress subnet(config.netmask[0], config.netmask[1], config.netmask[2], config.netmask[3]);
+    IPAddress ip(configWifi.ip[0], configWifi.ip[1], configWifi.ip[2], configWifi.ip[3]);
+    IPAddress gateway(configWifi.gateway[0], configWifi.gateway[1], configWifi.gateway[2], configWifi.gateway[3]);
+    IPAddress subnet(configWifi.netmask[0], configWifi.netmask[1], configWifi.netmask[2], configWifi.netmask[3]);
 
     Serial.setDebugOutput(false);
 
     for (int i = 0; i < 3 && WiFi.status() != WL_CONNECTED; i++)
     {
-        Serial.print("begin wifi to ");
-        Serial.println(config.ssid);
+        PRINTF("begin wifi to ");
+        PRINTLN(configWifi.ssid);
 
         WiFi.forceSleepWake();
         delay(1);
@@ -34,16 +27,16 @@ bool connect_wifi()
 
         WiFi.mode( WIFI_STA );
 
-        if(!(config.ip[0] == 0 && config.ip[1] == 0 && config.ip[2] == 0 && config.ip[3] == 0))
+        if(!(configWifi.ip[0] == 0 && configWifi.ip[1] == 0 && configWifi.ip[2] == 0 && configWifi.ip[3] == 0))
         {
-            Serial.println("Using static ip");
+            PRINTLN("Using static ip");
             WiFi.config(ip, gateway, subnet);
         }
-        WiFi.begin(config.ssid, config.pass);
+        WiFi.begin(configWifi.ssid, configWifi.pass);
 
         for (int j = 0; j < 30 && WiFi.status() != WL_CONNECTED; j++)
         {
-            Serial.println("waiting for Wifi");
+            PRINTLN("waiting for Wifi");
             digitalWrite(LED_BUILTIN, LOW); // Turn the LED on (Note that LOW is the voltage level)
             delay(100);
             digitalWrite(LED_BUILTIN, HIGH); // Turn the LED off
@@ -52,14 +45,14 @@ bool connect_wifi()
 
         if (WiFi.status() == WL_CONNECTED)
         {
-            Serial.println("wifi ok");
+            PRINTLN("wifi ok");
             return true;
         }
 
         Serial.setDebugOutput(true); //if at first it doesn't properly connect, try with debug
 
-        Serial.print("Wifi status:");
-        Serial.println(WiFi.status());
+        PRINTF("Wifi status:");
+        PRINTLN(WiFi.status());
 
         for (int i = 0; i < WiFi.status(); i++)
         {

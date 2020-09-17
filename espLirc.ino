@@ -5,6 +5,7 @@
 #include "wifi.h"
 #include "setup_config.h"
 #include "config.h"
+#include "print.h"
 
 // #include <GDBStub.h>
 
@@ -26,9 +27,6 @@ WiFiClient serverClients[MAX_SRV_CLIENTS];
 
 char sbuffer[1024];
 
-LircRemoteConfig remote_config;
-char keyConfig[2048];
-size_t keyConfigSize = 0;
 size_t selectedKeyPos = 0;
 char blastType = 0; //0 = nothing, 1 = once, 2 = repeatedly
 
@@ -44,33 +42,38 @@ void setup()
     Serial.begin(115200);
     SPIFFS.begin();
 
+    // gdbstub_init();
+
+    readConfig();
+
     uint32_t mode_magic;
     ESP.rtcUserMemoryRead(rtc_mode, &mode_magic, sizeof(mode_magic));
 
     if (mode_magic == mode_start_config ||
         mode_magic == mode_start_normal ||
         !SPIFFS.exists(path_wifi_txt) || 
-        !SPIFFS.exists(path_lirc_txt))
+        !SPIFFS.exists(path_lirc_txt) ||
+        true)
     {
-        Serial.println("** Config boot **");
+        PRINTLN("** Config boot **");
         ESP.rtcUserMemoryWrite(rtc_mode, &mode_start_config, sizeof(mode_magic));
 
         if (mode_magic == mode_start_normal)
         {
-            Serial.println("double reset detected");
+            PRINTLN("double reset detected");
         }
         else if (mode_magic == mode_start_config)
         {
-            Serial.println("triple reset detected");
+            PRINTLN("triple reset detected");
         }
 
         if (!SPIFFS.exists(path_wifi_txt))
         {
-            Serial.println("no wifi");
+            PRINTLN("no wifi");
         }
         if (!SPIFFS.exists(path_lirc_txt))
         {
-            Serial.println("no lirc");
+            PRINTLN("no lirc");
         }
 
         setupConfig(mode_magic == mode_start_config);
@@ -80,12 +83,12 @@ void setup()
     }
     else
     {
-        Serial.println("** Normal boot **");
+        PRINTLN("** Normal boot **");
         ESP.rtcUserMemoryWrite(rtc_mode, &mode_start_normal, sizeof(mode_magic));
 
         if(!connect_wifi() && mode_magic == mode_end_config) //could not cfg to wifi after config boot, reset to config
         {
-            Serial.println("Wifi after config failed, restarting");
+            PRINTLN("Wifi after config failed, restarting");
             ESP.restart();
         }
 
@@ -93,31 +96,13 @@ void setup()
         lirc_server.begin();
         lirc_server.setNoDelay(true);
 
-        Serial.print("Ready!");
-        Serial.print("IP: ");
-        Serial.println(WiFi.localIP());
+        PRINTF("Ready!");
+        PRINTF("IP: ");
+        PRINTLN(WiFi.localIP());
 
         digitalWrite(LED_BUILTIN, HIGH);
 
-        File configF = SPIFFS.open(path_lirc_txt, "r");
-        if(configF)
-        {
-            configF.readBytes((char*)&remote_config, sizeof(remote_config));
-            keyConfigSize = configF.readBytes(keyConfig, sizeof(keyConfig));
-            configF.close();
-        }
-
-        Serial.printf("sizeof: %d\n", sizeof(remote_config));
-        Serial.printf("Number of bits: %d\n", remote_config.nb_bits);
-        Serial.printf("frequency: %d\n", remote_config.frequency);
-        for(int i=0;i<5;++i) Serial.printf("header: %d\n", remote_config.header[i]);
-        for(int i=0;i<5;++i) Serial.printf("one: %d\n", remote_config.one[i]);
-        for(int i=0;i<5;++i) Serial.printf("zero: %d\n", remote_config.zero[i]);
-        for(int i=0;i<5;++i) Serial.printf("ptrail: %d\n", remote_config.ptrail[i]);
-        Serial.printf("gap length: %d\n", remote_config.gap);
-        Serial.printf("Number of codes: %d\n", (unsigned short)remote_config.nb_codes);
-
-        //analogWriteFreq(remote_config.frequency);
+        //analogWriteFreq(configRemote.frequency);
 
         ESP.rtcUserMemoryWrite(rtc_mode, &mode_end_normal, sizeof(mode_magic));
     }
@@ -141,8 +126,8 @@ void loopNormal()
                 if (serverClients[i])
                     serverClients[i].stop();
                 serverClients[i] = lirc_server.available();
-                Serial.print("New client: ");
-                Serial.println(serverClients[i].remoteIP());
+                PRINTF("New client: ");
+                PRINTLN(serverClients[i].remoteIP());
                 continue;
             }
         }
@@ -165,12 +150,12 @@ void loopNormal()
             input[read] = 0;
             if (strcmp(input, "#OTA") == 0)
             {
-                ESP.rtcUserMemoryWrite(rtc_mode, &mode_end_config, sizeof(mode_end_config));
+                ESP.rtcUserMemoryWrite(rtc_mode, &mode_start_normal, sizeof(mode_start_normal));
                 ESP.restart();
             }
 
-            Serial.print('>');
-            Serial.println(input);
+            PRINTF(">");
+            PRINTLN(input);
 
             strcpy(sbuffer + 6, input);
             size_t pos = 6 + strlen(input);
@@ -188,17 +173,17 @@ void loopNormal()
                 {
                     if(strcmp(directive, "LIST") == 0)
                     {
-                        if(strcmp(remote, remote_config.name) == 0)
+                        if(strcmp(remote, configRemote.name) == 0)
                         {
-                            Serial.println("Going to send keys");
-                            pos += sprintf(sbuffer + pos, "SUCCESS\nDATA\n%d\n", remote_config.nb_codes);
+                            PRINTLN("Going to send keys");
+                            pos += sprintf(sbuffer + pos, "SUCCESS\nDATA\n%d\n", configRemote.nb_codes);
                             size_t kpos = 0;
-                            for (char i = 0; i < remote_config.nb_codes; ++i)
+                            for (char i = 0; i < configRemote.nb_codes; ++i)
                             {
-                                pos += sprintf(sbuffer + pos, "%d %s\n", i, keyConfig + kpos);
-                                kpos += 16 + remote_config.nb_bits;
+                                pos += sprintf(sbuffer + pos, "%d %s\n", i, configKeys + kpos);
+                                kpos += 16 + configRemote.nb_bits;
                                 
-                                if(kpos + remote_config.nb_bits >= sizeof(keyConfig))
+                                if(kpos + configRemote.nb_bits >= sizeof(configKeys))
                                     break;
                             };
                             strcpy(sbuffer + pos, "END\n");
@@ -218,24 +203,24 @@ void loopNormal()
                     *separator = 0; //split the input
                     char *key = ++separator;
 
-                    if(strcmp(remote, remote_config.name) == 0)
+                    if(strcmp(remote, configRemote.name) == 0)
                     {
                         if(strcmp(directive, "SEND_ONCE") == 0)
                         {
-                            Serial.println("send once");
+                            PRINTLN("send once");
                             size_t kpos = 0;
                             blastType = 0;
-                            for (char i = 0; i < remote_config.nb_codes; ++i)
+                            for (char i = 0; i < configRemote.nb_codes; ++i)
                             {
-                                if(strcmp(keyConfig + kpos, key) == 0)
+                                if(strcmp(configKeys + kpos, key) == 0)
                                 {
                                     selectedKeyPos = kpos;
                                     blastType = 1;
                                     break;
                                 }
-                                kpos += 16 + remote_config.nb_bits;
+                                kpos += 16 + configRemote.nb_bits;
                                 
-                                if(kpos + remote_config.nb_bits >= sizeof(keyConfig))
+                                if(kpos + configRemote.nb_bits >= sizeof(configKeys))
                                     break;
                             }
 
@@ -246,20 +231,20 @@ void loopNormal()
                         }
                         else if(strcmp(directive, "SEND_START") == 0)
                         {
-                            Serial.println("send start");
+                            PRINTLN("send start");
                             size_t kpos = 0;
                             blastType = 0;
-                            for (char i = 0; i < remote_config.nb_codes; ++i)
+                            for (char i = 0; i < configRemote.nb_codes; ++i)
                             {
-                                if(strcmp(keyConfig + kpos, key) == 0)
+                                if(strcmp(configKeys + kpos, key) == 0)
                                 {
                                     selectedKeyPos = kpos;
                                     blastType = 2;
                                     break;
                                 }
-                                kpos += 16 + remote_config.nb_bits;
+                                kpos += 16 + configRemote.nb_bits;
                                 
-                                if(kpos + remote_config.nb_bits >= sizeof(keyConfig))
+                                if(kpos + configRemote.nb_bits >= sizeof(configKeys))
                                     break;
                             }
 
@@ -270,13 +255,13 @@ void loopNormal()
                         }   
                         else if(strcmp(directive, "SEND_STOP") == 0)
                         {
-                            Serial.println("send stop");
+                            PRINTLN("send stop");
                             blastType = 0;
                             strcpy(sbuffer + pos, "SUCCESS\nEND\n");
                         } 
                         else if(strcmp(directive, "LIST") == 0)
                         {
-                            Serial.println("send key info");
+                            PRINTLN("send key info");
                             strcpy(sbuffer + pos, "ERROR\nDATA\n1\nNot implemented\nEND\n");
                         }
                     }
@@ -291,7 +276,7 @@ void loopNormal()
                 /* directive only? */
                 if(strcmp(input, "LIST") == 0)
                 {
-                    sprintf(sbuffer + pos, "SUCCESS\nDATA\n1\n%s\nEND\n", remote_config.name);
+                    sprintf(sbuffer + pos, "SUCCESS\nDATA\n1\n%s\nEND\n", configRemote.name);
                 }
                 else
                 {
@@ -300,47 +285,21 @@ void loopNormal()
             }
 
             serverClients[i].write(sbuffer, strlen(sbuffer));
-            Serial.print(sbuffer);
+            PRINTF("%s", sbuffer);
         }
     }
     
-    if(blastType > 0 && selectedKeyPos < sizeof(keyConfig))
+    if(blastType > 0 && selectedKeyPos < configKeysSize)
     {
-        Serial.printf("Blasting %s\n", keyConfig + selectedKeyPos);
+        PRINTF("Blasting %s\n", configKeys + selectedKeyPos);
 
-        for (char i = 0; i < 5;++i)
-        {
-            mark_or_space(i, remote_config.header[i]);
-        }
-
-        for (char b = 0; b < remote_config.nb_bits;++b)
-        {
-            if(keyConfig[selectedKeyPos + 16 + b])
-            {
-                for (char i = 0; i < 5;++i)
-                {
-                    mark_or_space(i, remote_config.one[i]);
-                }
-            }
-            else
-            {
-                for (char i = 0; i < 5;++i)
-                {
-                    mark_or_space(i, remote_config.zero[i]);
-                }
-            }
-        }
-
-        for (char i = 0; i < 5;++i)
-        {
-            mark_or_space(i, remote_config.ptrail[i]);
-        }
+        blast(configKeys + selectedKeyPos + 16);
 
         if (blastType == 1)
             blastType = 0;
         else
         {
-            _delayMicroseconds(remote_config.gap);
+            _delayMicroseconds(configRemote.gap);
         }
     }
 
@@ -348,6 +307,40 @@ void loopNormal()
     {
         ESP.restart();
     }
+}
+
+void blast(const char *bits)
+{
+    for (char i = 0; i < 5;++i)
+    {
+        mark_or_space(i, configRemote.header[i]);
+    }
+
+    for (char b = 0; b < configRemote.nb_bits;++b)
+    {
+        if(bits[b] == '1')
+        {
+            Serial.printf("1");
+            for (char i = 0; i < 5; ++i)
+            {
+                mark_or_space(i, configRemote.one[i]);
+            }
+        }
+        else if(bits[b] == '0')
+        {
+            Serial.printf("0");
+            for (char i = 0; i < 5;++i)
+            {
+                mark_or_space(i, configRemote.zero[i]);
+            }
+        }
+    }
+
+    for (char i = 0; i < 5;++i)
+    {
+        mark_or_space(i, configRemote.ptrail[i]);
+    }
+
 }
 
 void mark_or_space(char i, uint16_t time)
@@ -403,4 +396,14 @@ void loop()
     {
         loopNormal();
     }
+}
+
+void resetToStartConfig()
+{
+    ESP.rtcUserMemoryWrite(rtc_mode, &mode_start_normal, sizeof(mode_start_normal));
+}
+
+void resetToEndConfig()
+{
+    ESP.rtcUserMemoryWrite(rtc_mode, &mode_end_config, sizeof(mode_end_config));
 }

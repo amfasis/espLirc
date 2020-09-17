@@ -5,124 +5,109 @@
 #include <ArduinoOTA.h>
 
 #include "wifi.h"
+#include "print.h"
 
 ESP8266WebServer server(80);
 
+String printIp(char source[4])
+{
+    return String((int)source[0]) + "." + String((int)source[1]) + "." + String((int)source[2]) + "." + String((int)source[3]);
+}
+
+String printMac(char source[6])
+{
+    return String((int)source[0], HEX) + ":" +
+           String((int)source[1], HEX) + ":" +
+           String((int)source[2], HEX) + ":" +
+           String((int)source[3], HEX) + ":" +
+           String((int)source[4], HEX) + ":" +
+           String((int)source[5], HEX);
+}
+
+void parseIp(char *dest, const String& source)
+{
+    sscanf(source.c_str(), "%hhu.%hhu.%hhu.%hhu", &dest[0], &dest[1], &dest[2], &dest[3]);
+}
+
+String printSequence(int arr0, int arr1, int arr2, int arr3, int arr4)
+{
+    return String(arr0) + " " + 
+           String(arr1) + " " + 
+           String(arr2) + " " + 
+           String(arr3) + " " + 
+           String(arr4);
+}
+
+void parseSequence(uint16_t *dest, const String& source)
+{
+    sscanf(source.c_str(), "%u %u %u %u %u", &dest[0], &dest[1], &dest[2], &dest[3], &dest[4]);
+}
+
+void parseMac(char *dest, const String& source)
+{
+    sscanf(source.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &dest[0], &dest[1], &dest[2], &dest[3], &dest[4], &dest[5]);
+}
+
 void handleRoot()
 {
-    Serial.println("handling root");
-    File configF = SPIFFS.open(path_wifi_txt, "r");
-    WifiConfig configW;
-    if(configF)
-    {
-        configF.readBytes((char*)&configW, sizeof(configW));
-        configF.close();
+    PRINTLN("handling root");
 
-        Serial.println(configW.ssid);
-        Serial.println(configW.pass);
-        Serial.print((int)configW.ip[0]);
-        Serial.print((int)configW.ip[1]);
-        Serial.print((int)configW.ip[2]);
-        Serial.println((int)configW.ip[3]);
-        Serial.print((int)configW.netmask[0]);
-        Serial.print((int)configW.netmask[1]);
-        Serial.print((int)configW.netmask[2]);
-        Serial.println((int)configW.netmask[3]);
-        Serial.print((int)configW.gateway[0]);
-        Serial.print((int)configW.gateway[1]);
-        Serial.print((int)configW.gateway[2]);
-        Serial.println((int)configW.gateway[3]);
-    }
+    String body = "<html><body>";
+    body += "<h1>Wifi settings</h1>";
+    body += "<form method=\"post\" enctype=\"application/x-www-form-urlencoded\" action=\"/wifi/\">";
+    body += "<input type=\"text\" name=\"ssid\" placeholder=\"ssid\" maxlength=\"15\" value=\"" + String(configWifi.ssid) + String("\"/><br/>");
+    body += "<input type=\"text\" name=\"pass\" placeholder=\"pass\" maxlength=\"35\" value=\"" + String(configWifi.pass) + String("\"/><br/>");
+    body += "<input type=\"text\" name=\"ip\" placeholder=\"ip\" value=\"" + printIp(configWifi.ip) + String("\"/> current: ") + WiFi.localIP().toString() + String("<br/>");
+    body += "<input type=\"text\" name=\"nm\" placeholder=\"nm\" value=\"" + printIp(configWifi.netmask) + String("\"/><br/>");
+    body += "<input type=\"text\" name=\"gw\" placeholder=\"gw\" value=\"" + printIp(configWifi.gateway) + String("\"/><br/>");
+    body += "<input type=\"submit\" value=\"Opslaan\"/>";
+    body += "</form>";
 
-    server.send(200, "text/html", "<html><body>\
-    <h1>Wifi settings</h1>\
-    <form method=\"post\" enctype=\"application/x-www-form-urlencoded\" action=\"/wifi/\">\
-        <input type=\"text\" name=\"ssid\" placeholder=\"ssid\" maxlength=\"15\"/><br/>\
-        <input type=\"text\" name=\"pass\" placeholder=\"pass\" maxlength=\"35\"/><br/>\
-        <input type=\"text\" name=\"ip1\" placeholder=\"ip1\" min=\"0\" max=\"255\"/>\
-        <input type=\"text\" name=\"ip2\" placeholder=\"ip2\" min=\"0\" max=\"255\"/>\
-        <input type=\"text\" name=\"ip3\" placeholder=\"ip3\" min=\"0\" max=\"255\"/>\
-        <input type=\"text\" name=\"ip4\" placeholder=\"ip4\" min=\"0\" max=\"255\"/><br/>\
-        <input type=\"text\" name=\"nm1\" placeholder=\"nm1\" min=\"0\" max=\"255\"/>\
-        <input type=\"text\" name=\"nm2\" placeholder=\"nm2\" min=\"0\" max=\"255\"/>\
-        <input type=\"text\" name=\"nm3\" placeholder=\"nm3\" min=\"0\" max=\"255\"/>\
-        <input type=\"text\" name=\"nm4\" placeholder=\"nm4\" min=\"0\" max=\"255\"/><br/>\
-        <input type=\"text\" name=\"gw1\" placeholder=\"gw1\" min=\"0\" max=\"255\"/>\
-        <input type=\"text\" name=\"gw2\" placeholder=\"gw2\" min=\"0\" max=\"255\"/>\
-        <input type=\"text\" name=\"gw3\" placeholder=\"gw3\" min=\"0\" max=\"255\"/>\
-        <input type=\"text\" name=\"gw4\" placeholder=\"gw4\" min=\"0\" max=\"255\"/><br/>\
-        <input type=\"submit\" value=\"Opslaan\"/>\
-    </form>\
-    <h1>Lirc settings</h1>\
-    <form method=\"post\" enctype=\"multipart/form-data\" action=\"/lirc/\">\
-        <input type=\"file\" name=\"name\">\
-        <input class=\"button\" type=\"submit\" value=\"Upload\">\
-    </form>\
-    <h1>Remove config</h1>\
-    <form method=\"post\" enctype=\"application/x-www-form-urlencoded\" action=\"/clear/\">\
-        <input type=\"submit\" value=\"Clear\"/>\
-    </form>\
-    <h1>Reboot</h1>\
-    <form method=\"post\" enctype=\"application/x-www-form-urlencoded\" action=\"/reboot/\">\
-        <input type=\"submit\" value=\"Reboot\"/>\
-    </form>\
-    </body></html>");
+    body += "<h1>Lirc settings</h1>";
+    body += "<form method=\"post\" enctype=\"multipart/form-data\" action=\"/lirc/\">";
+    body += "<input type=\"file\" name=\"name\">";
+    body += "<input class=\"button\" type=\"submit\" value=\"Upload\">";
+    body += "</form>";
+
+    body += "<h1>Remove config</h1>";
+    body += "<form method=\"post\" enctype=\"application/x-www-form-urlencoded\" action=\"/clear/\">";
+    body += "<input type=\"submit\" value=\"Clear\"/>";
+    body += "</form>";
+    
+    body += "<h1>Reboot</h1>";
+    body += "<form method=\"post\" enctype=\"application/x-www-form-urlencoded\" action=\"/reboot/\">";
+    body += "<input type=\"submit\" value=\"Reboot\"/>";
+    body += "<label><input type=\"checkbox\" name=\"config\"/>To config</label>";
+    body += "</form>";
+    body += "</body></html>";
+    server.send(200, "text/html", body);
 }
 
 void handleWifiSettings()
 {
-    Serial.println("handling wifi settings");
-    File configF = SPIFFS.open(path_wifi_txt, "r");
-    WifiConfig config;
-    if(configF)
-    {
-        configF.readBytes((char*)&config, sizeof(config));
-        configF.close();
-    }
-
+    PRINTLN("handling wifi settings");
     if(server.hasArg("ssid"))
-        server.arg("ssid").toCharArray(config.ssid, sizeof(config.ssid));
+        server.arg("ssid").toCharArray(configWifi.ssid, sizeof(configWifi.ssid));
     if(server.hasArg("pass"))
-        server.arg("pass").toCharArray(config.pass, sizeof(config.pass));
+        server.arg("pass").toCharArray(configWifi.pass, sizeof(configWifi.pass));
     
-    if(server.hasArg("ip1"))
-        config.ip[0] = static_cast<uint8_t>(server.arg("ip1").toInt());
-    if(server.hasArg("ip2"))
-        config.ip[1] = static_cast<uint8_t>(server.arg("ip2").toInt());
-    if(server.hasArg("ip3"))
-        config.ip[2] = static_cast<uint8_t>(server.arg("ip3").toInt());
-    if(server.hasArg("ip4"))
-        config.ip[3] = static_cast<uint8_t>(server.arg("ip4").toInt());
-
-    if(server.hasArg("gw1"))
-        config.gateway[0] = static_cast<uint8_t>(server.arg("gw1").toInt());
-    if(server.hasArg("gw2"))
-        config.gateway[1] = static_cast<uint8_t>(server.arg("gw2").toInt());
-    if(server.hasArg("gw3"))
-        config.gateway[2] = static_cast<uint8_t>(server.arg("gw3").toInt());
-    if(server.hasArg("gw4"))
-        config.gateway[3] = static_cast<uint8_t>(server.arg("gw4").toInt());
-
-    if(server.hasArg("nm1"))
-        config.netmask[0] = static_cast<uint8_t>(server.arg("nm1").toInt());
-    if(server.hasArg("nm2"))
-        config.netmask[1] = static_cast<uint8_t>(server.arg("nm2").toInt());
-    if(server.hasArg("nm3"))
-        config.netmask[2] = static_cast<uint8_t>(server.arg("nm3").toInt());
-    if(server.hasArg("nm4"))
-        config.netmask[3] = static_cast<uint8_t>(server.arg("nm4").toInt());
-
+    if(server.hasArg("ip"))
+        parseIp(configWifi.ip, server.arg("ip"));
+    if(server.hasArg("gw"))
+        parseIp(configWifi.gateway, server.arg("gw"));
+    if(server.hasArg("nm"))
+        parseIp(configWifi.netmask, server.arg("nm"));
     File configF2 = SPIFFS.open(path_wifi_txt, "w+");
     if(configF2)
     {
-        unsigned char * data = reinterpret_cast<unsigned char*>(&config);
-        size_t bw = configF2.write(data, sizeof(config));
+        unsigned char * data = reinterpret_cast<unsigned char*>(&configWifi);
+        size_t bw = configF2.write(data, sizeof(configWifi));
         configF2.close();
-        Serial.println(bw);
+        PRINTF("written length: %d\n", bw);
     }
     else
     {
-        Serial.println("could not open wifi.txt");
+        PRINTLN("could not open wifi.txt");
     }
 
     if (server.method() != HTTP_POST) 
@@ -139,7 +124,7 @@ void handleWifiSettings()
 File fsUploadFile;
 void handleLircUpload()
 {
-    Serial.println("Handling lirc upload");
+    PRINTLN("Handling lirc upload");
 
     // upload a new file to the SPIFFS
     HTTPUpload &upload = server.upload();
@@ -148,8 +133,8 @@ void handleLircUpload()
         String filename = upload.filename;
         if (!filename.startsWith("/"))
             filename = "/" + filename;
-        Serial.print("handleFileUpload Name: ");
-        Serial.println(filename);
+        PRINTLN("handleFileUpload Name: ");
+        PRINTLN(filename);
         fsUploadFile = SPIFFS.open(path_lirc_txt, "w"); // Open the file for writing in SPIFFS (create if it doesn't exist)
         filename = String();
     }
@@ -163,8 +148,8 @@ void handleLircUpload()
         if (fsUploadFile)
         {                         // If the file was successfully created
             fsUploadFile.close(); // Close the file again
-            Serial.print("handleFileUpload Size: ");
-            Serial.println(upload.totalSize);
+            PRINTLN("handleFileUpload Size: ");
+            PRINTLN(upload.totalSize);
             server.sendHeader("Location", "/"); // Redirect the client to the success page
             server.send(303);
         }
@@ -177,10 +162,12 @@ void handleLircUpload()
 
 void handleClear()
 {
-    Serial.println("Handling settings clear");
+    PRINTLN("Handling settings clear");
 
     SPIFFS.remove(path_wifi_txt);
     SPIFFS.remove(path_lirc_txt);
+
+    readConfig();
 
     if (server.method() != HTTP_POST) 
     {
@@ -195,7 +182,12 @@ void handleClear()
 
 void handleReboot()
 {
-    Serial.println("Handling reboot");
+    PRINTLN("Handling reboot");
+
+    if(server.hasArg("config"))
+    {
+        resetToStartConfig();
+    }
 
     if (server.method() != HTTP_POST) 
     {
@@ -206,14 +198,139 @@ void handleReboot()
         server.sendHeader("Location", String("/"), true);
         server.send ( 302, "text/plain", "");
 
-        delay(1000);
+        //Go to sleep
+        PRINTLN("sleeping 3s");
+        delay(3000);
         ESP.restart();
     }
 }
 
+void handleRssi()
+{
+    server.send(200, "text/html", "<html><body>RSSI: " + String(WiFi.RSSI()) + "</body></html");
+}
+
+void handleBlast()
+{
+    PRINTLN("Handling blast");
+
+    if(server.hasArg("header"))
+        parseSequence(configRemote.header, server.arg("header"));
+    if(server.hasArg("one"))
+        parseSequence(configRemote.one, server.arg("one"));
+    if(server.hasArg("zero"))
+        parseSequence(configRemote.zero, server.arg("zero"));
+    if(server.hasArg("ptrail"))
+        parseSequence(configRemote.ptrail, server.arg("ptrail"));
+    if(server.hasArg("gap"))
+        configRemote.gap = server.arg("gap").toInt();
+
+    if(server.hasArg("code"))
+    {
+        PRINTF("handling code %s\n", server.arg("code").c_str());
+        String input = server.arg("code");
+        int last = input.length() - 1;
+        char buffer[32];
+        memset(buffer, 0, sizeof(buffer));
+        for (int i = 0; i < 8 && i <= last; i++)
+        {
+            buffer[32 - i * 4 - 1] = (input[last - i] == '1' ||
+                                      input[last - i] == '3' ||
+                                      input[last - i] == '5' ||
+                                      input[last - i] == '7' ||
+                                      input[last - i] == '9' ||
+                                      input[last - i] == 'B' ||
+                                      input[last - i] == 'D' ||
+                                      input[last - i] == 'F') ? '1' : '0';
+            buffer[32 - i * 4 - 2] = (input[last - i] == '2' ||
+                                      input[last - i] == '3' ||
+                                      input[last - i] == '6' ||
+                                      input[last - i] == '7' ||
+                                      input[last - i] == 'A' ||
+                                      input[last - i] == 'B' ||
+                                      input[last - i] == 'E' ||
+                                      input[last - i] == 'F') ? '1' : '0';
+            buffer[32 - i * 4 - 3] = (input[last - i] == '4' ||
+                                      input[last - i] == '5' ||
+                                      input[last - i] == '6' ||
+                                      input[last - i] == '7' ||
+                                      input[last - i] == 'C' ||
+                                      input[last - i] == 'D' ||
+                                      input[last - i] == 'E' ||
+                                      input[last - i] == 'F') ? '1' : '0';
+            buffer[32 - i * 4 - 4] = (input[last - i] == '8' ||
+                                      input[last - i] == '9' ||
+                                      input[last - i] == 'A' ||
+                                      input[last - i] == 'B' ||
+                                      input[last - i] == 'C' ||
+                                      input[last - i] == 'D' ||
+                                      input[last - i] == 'E' ||
+                                      input[last - i] == 'F') ? '1' : '0';
+        }
+
+        blast(buffer);
+    }
+
+    String formStart = "<form action=\"/blast/\">";
+    String formEnd = "<input type=\"submit\" value=\"Versturen\"/></form>";
+
+    String body = "<html><body>";
+    body += "<h1>Blast settings</h1>";
+
+    body += formStart;
+    body += "Header <input type=\"text\" name=\"header\" placeholder=\"header\" maxlength=\"15\" value=\"";
+    body += printSequence(configRemote.header[0], 
+                          configRemote.header[1], 
+                          configRemote.header[2], 
+                          configRemote.header[3], 
+                          configRemote.header[4]);
+    body += "\"/>" + formEnd;
+
+    body += formStart;
+    body += "One <input type=\"text\" name=\"one\" placeholder=\"one\" maxlength=\"15\" value=\"";
+    body += printSequence(configRemote.one[0], 
+                          configRemote.one[1], 
+                          configRemote.one[2], 
+                          configRemote.one[3], 
+                          configRemote.one[4]);
+    body += "\"/>" + formEnd;
+    
+    body += formStart;
+    body += "Zero <input type=\"text\" name=\"zero\" placeholder=\"zero\" maxlength=\"15\" value=\"";
+    body += printSequence(configRemote.zero[0], 
+                          configRemote.zero[1], 
+                          configRemote.zero[2], 
+                          configRemote.zero[3], 
+                          configRemote.zero[4]);
+    body += "\"/>" + formEnd;
+    
+    body += formStart;
+    body += "PTrail <input type=\"text\" name=\"ptrail\" placeholder=\"ptrail\" maxlength=\"15\" value=\"";
+    body += printSequence(configRemote.ptrail[0], 
+                          configRemote.ptrail[1], 
+                          configRemote.ptrail[2], 
+                          configRemote.ptrail[3], 
+                          configRemote.ptrail[4]);
+    body += "\"/>" + formEnd;
+
+    body += formStart;
+    body += "Gap <input type=\"text\" name=\"gap\" placeholder=\"gap\" maxlength=\"15\" value=\"" + String(configRemote.gap) + String("\"/>");
+    body += formEnd;
+
+    body += "<br>Send:" + formStart;
+    body += "0x<input type=\"text\" name=\"code\" placeholder=\"code\" maxlength=\"15\" value=\"" + server.arg("code") + String("\"/><br/>");
+    body += formEnd;
+
+    body += "</body></html>";
+
+    server.send(200, "text/html", body);
+}
+
 void handleNotFound()
 {
-    server.send(404, "text/plain", "404: Not found"); // Send HTTP status 404 (Not Found) when there's no handler for the URI in the request
+//    server.send(404, "text/plain", "404: Not found"); // Send HTTP status 404 (Not Found) when there's no handler for the URI in the request
+    server.sendHeader("Location", String("/"), true);
+    server.send ( 302, "text/plain", "");
 }
 
 bool ota = false; //false means soft_ap, true means ota
@@ -223,52 +340,52 @@ void setupConfig(bool forceAp)
     if(!forceAp && connect_wifi())
     {
         ArduinoOTA.onStart([]() {
-            Serial.println("Start OTA");
+            PRINTLN("Start OTA");
         });
         ArduinoOTA.onEnd([]() {
-            Serial.println("\nEnd OTA");
+            PRINTLN("\nEnd OTA");
         });
         ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-            Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+            PRINTF("Progress: %u%%\r", (progress / (total / 100)));
         });
         ArduinoOTA.onError([](ota_error_t error) {
-            Serial.printf("Error[%u]: ", error);
+            PRINTF("Error[%u]: ", error);
             if (error == OTA_AUTH_ERROR)
-                Serial.println("Auth Failed");
+                PRINTLN("Auth Failed");
             else if (error == OTA_BEGIN_ERROR)
-                Serial.println("Begin Failed");
+                PRINTLN("Begin Failed");
             else if (error == OTA_CONNECT_ERROR)
-                Serial.println("Connect Failed");
+                PRINTLN("Connect Failed");
             else if (error == OTA_RECEIVE_ERROR)
-                Serial.println("Receive Failed");
+                PRINTLN("Receive Failed");
             else if (error == OTA_END_ERROR)
-                Serial.println("End Failed");
+                PRINTLN("End Failed");
         });
         ArduinoOTA.begin();
         ota = true;
 
-        Serial.println("Ready for OTA");
-        Serial.print("IP address: ");
-        Serial.println(WiFi.localIP());
+        PRINTLN("Ready for OTA");
+        PRINTLN("IP address: ");
+        PRINTLN(WiFi.localIP());
     }
     else
     {        
         WiFi.mode(WIFI_AP_STA);
         
-        Serial.print("Setting soft-AP ... ");
+        PRINTLN("Setting soft-AP ...");
         boolean result = WiFi.softAP("ESPsoftAP_01");
-        Serial.print("Server IP address: ");
-        Serial.println(WiFi.softAPIP());
-        Serial.print("Server MAC address: ");
-        Serial.println(WiFi.softAPmacAddress());
+        PRINTF("Server IP address: ");
+        PRINTLN(WiFi.softAPIP());
+        PRINTF("Server MAC address: ");
+        PRINTLN(WiFi.softAPmacAddress());
 
         if(result == true)
         {
-            Serial.println("Ready");
+            PRINTLN("Ready");
         }
         else
         {
-            Serial.println("Failed!");
+            PRINTLN("Failed!");
         }
     }
 
@@ -277,11 +394,13 @@ void setupConfig(bool forceAp)
     server.on("/lirc/", HTTP_POST, [](){ server.send(200); }, handleLircUpload);
     server.on("/clear/", HTTP_POST, handleClear);
     server.on("/reboot/", HTTP_POST, handleReboot);
+    server.on("/rssi/", handleRssi);
+    server.on("/blast/", handleBlast);
     server.onNotFound(handleNotFound);
 
     server.begin();
 
-    Serial.println("Webserver ready");
+    PRINTLN("Webserver ready");
 }
 
 int i = 0;
@@ -293,8 +412,18 @@ void loopConfig()
     }
     else
     {
-        if(++i%200000 == 0)
-            Serial.printf("Stations connected = %d\n", WiFi.softAPgetStationNum());
+        if(WiFi.getMode() != WIFI_AP_STA)
+        {
+            if(++i%100000 == 0)
+            {
+                PRINTF("RSSI: %d\n", WiFi.RSSI());
+            }
+        }
+        else
+        {
+            if(++i%400000 == 0)
+                PRINTF("Stations connected = %d\n", WiFi.softAPgetStationNum());
+        }
     }
 
     server.handleClient();

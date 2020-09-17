@@ -4,4 +4,9 @@
 void setupConfig(bool forceAp);
 void loopConfig();
 
+extern void resetToStartConfig();
+extern void resetToEndConfig();
+
+extern void blast(const char *bits);
+
 #endif /* SETUP_CONFIG_H */
