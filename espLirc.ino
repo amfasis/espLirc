@@ -52,8 +52,7 @@ void setup()
     if (mode_magic == mode_start_config ||
         mode_magic == mode_start_normal ||
         !SPIFFS.exists(path_wifi_txt) || 
-        !SPIFFS.exists(path_lirc_txt) ||
-        true)
+        !SPIFFS.exists(path_lirc_txt))
     {
         PRINTLN("** Config boot **");
         ESP.rtcUserMemoryWrite(rtc_mode, &mode_start_config, sizeof(mode_magic));
