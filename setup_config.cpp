@@ -38,11 +38,6 @@ String printSequence(int arr0, int arr1, int arr2, int arr3, int arr4)
            String(arr4);
 }
 
-void parseSequence(uint16_t *dest, const String& source)
-{
-    sscanf(source.c_str(), "%u %u %u %u %u", &dest[0], &dest[1], &dest[2], &dest[3], &dest[4]);
-}
-
 void parseMac(char *dest, const String& source)
 {
     sscanf(source.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &dest[0], &dest[1], &dest[2], &dest[3], &dest[4], &dest[5]);
@@ -214,14 +209,31 @@ void handleBlast()
 {
     PRINTLN("Handling blast");
 
-    if(server.hasArg("header"))
-        parseSequence(configRemote.header, server.arg("header"));
-    if(server.hasArg("one"))
-        parseSequence(configRemote.one, server.arg("one"));
-    if(server.hasArg("zero"))
-        parseSequence(configRemote.zero, server.arg("zero"));
-    if(server.hasArg("ptrail"))
-        parseSequence(configRemote.ptrail, server.arg("ptrail"));
+    String name = "header";
+    for (int i = 0; i < 5;i++)
+    {
+        if (server.hasArg(name + i))
+            configRemote.header[i] = server.arg(name + i).toInt();
+    }
+    name = "one";
+    for (int i = 0; i < 5;i++)
+    {
+        if (server.hasArg(name + i))
+            configRemote.one[i] = server.arg(name + i).toInt();
+    }
+    name = "zero";
+    for (int i = 0; i < 5;i++)
+    {
+        if (server.hasArg(name + i))
+            configRemote.zero[i] = server.arg(name + i).toInt();
+    }
+    name = "ptrail";
+    for (int i = 0; i < 5;i++)
+    {
+        if (server.hasArg(name + i))
+            configRemote.ptrail[i] = server.arg(name + i).toInt();
+    }
+
     if(server.hasArg("gap"))
         configRemote.gap = server.arg("gap").toInt();
 
@@ -272,46 +284,55 @@ void handleBlast()
     }
 
     String formStart = "<form action=\"/blast/\">";
-    String formEnd = "<input type=\"submit\" value=\"Versturen\"/></form>";
+    String formEnd = "<input type=\"submit\" value=\"Versturen\"/></form></br>";
 
     String body = "<html><body>";
     body += "<h1>Blast settings</h1>";
 
     body += formStart;
-    body += "Header <input type=\"text\" name=\"header\" placeholder=\"header\" maxlength=\"15\" value=\"";
-    body += printSequence(configRemote.header[0], 
-                          configRemote.header[1], 
-                          configRemote.header[2], 
-                          configRemote.header[3], 
-                          configRemote.header[4]);
-    body += "\"/>" + formEnd;
+    body += "Header ";
+    for (int i = 0; i < 5;i++)
+    {
+        body += " <input type =\"text\" name=\"header";
+        body += i;
+        body += "\" placeholder=\"header\" maxlength=\"15\" value=\"";
+        body += configRemote.header[i];
+        body += "\"/>";
+    }
+    body += formEnd;
 
-    body += formStart;
-    body += "One <input type=\"text\" name=\"one\" placeholder=\"one\" maxlength=\"15\" value=\"";
-    body += printSequence(configRemote.one[0], 
-                          configRemote.one[1], 
-                          configRemote.one[2], 
-                          configRemote.one[3], 
-                          configRemote.one[4]);
-    body += "\"/>" + formEnd;
+    body += "One ";
+    for (int i = 0; i < 5;i++)
+    {
+        body += " <input type =\"text\" name=\"one";
+        body += i;
+        body += "\" placeholder=\"one\" maxlength=\"15\" value=\"";
+        body += configRemote.one[i];
+        body += "\"/>";
+    }
+    body += formEnd;
     
-    body += formStart;
-    body += "Zero <input type=\"text\" name=\"zero\" placeholder=\"zero\" maxlength=\"15\" value=\"";
-    body += printSequence(configRemote.zero[0], 
-                          configRemote.zero[1], 
-                          configRemote.zero[2], 
-                          configRemote.zero[3], 
-                          configRemote.zero[4]);
-    body += "\"/>" + formEnd;
+    body += "Zero ";
+    for (int i = 0; i < 5;i++)
+    {
+        body += " <input type =\"text\" name=\"zero";
+        body += i;
+        body += "\" placeholder=\"zero\" maxlength=\"15\" value=\"";
+        body += configRemote.zero[i];
+        body += "\"/>";
+    }
+    body += formEnd;
     
-    body += formStart;
-    body += "PTrail <input type=\"text\" name=\"ptrail\" placeholder=\"ptrail\" maxlength=\"15\" value=\"";
-    body += printSequence(configRemote.ptrail[0], 
-                          configRemote.ptrail[1], 
-                          configRemote.ptrail[2], 
-                          configRemote.ptrail[3], 
-                          configRemote.ptrail[4]);
-    body += "\"/>" + formEnd;
+    body += "PTrail ";
+    for (int i = 0; i < 5;i++)
+    {
+        body += " <input type =\"text\" name=\"ptrail";
+        body += i;
+        body += "\" placeholder=\"ptrail\" maxlength=\"15\" value=\"";
+        body += configRemote.ptrail[i];
+        body += "\"/>";
+    }
+    body += formEnd;
 
     body += formStart;
     body += "Gap <input type=\"text\" name=\"gap\" placeholder=\"gap\" maxlength=\"15\" value=\"" + String(configRemote.gap) + String("\"/>");
